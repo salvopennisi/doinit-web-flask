@@ -6,9 +6,9 @@ import time
 import numpy as np
 
 
-load_status = dotenv.load_dotenv()
-if load_status is False:
-    raise RuntimeError('Environment variables not loaded.')
+#load_status = dotenv.load_dotenv()
+#if load_status is False:
+#    raise RuntimeError('Environment variables not loaded.')
 
 class Neo4jConnection:
     def __init__(self, uri, auth):
