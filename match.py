@@ -2,13 +2,8 @@ import dotenv
 import os
 from neo4j import GraphDatabase
 import pandas as pd 
-import time
 import numpy as np
-
-
-#load_status = dotenv.load_dotenv()
-#if load_status is False:
-#    raise RuntimeError('Environment variables not loaded.')
+import json 
 
 class Neo4jConnection:
     def __init__(self, uri, auth):
@@ -29,96 +24,98 @@ class Neo4jConnection:
             result = session.run(query, parameters)
             return result.data()
 
-
-
-
-def get_user_by_proximity(distance, user_position, processed_ids):
-    # Configura la tua connessione
-    URI = os.getenv("NEO4J_URI")
-    AUTH = {"user":os.getenv("NEO4J_USERNAME"),"password": os.getenv("NEO4J_PASSWORD")}
-
-    # Crea una connessione
-    neo4j_connection = Neo4jConnection(URI, AUTH)
-    neo4j_connection.connect()
-    latitude =  user_position['latitude']
+def get_user_by_proximity(connection, user_id:str, user_position:str, limit:int=100, max_distance:int=1000 ):
+    latitude = user_position['latitude']
     longitude = user_position['longitude']
-    query = f"""
-               MATCH (n:User)
-               WHERE point.distance(n.location, point({{latitude: {latitude}, longitude:{longitude}}}))/1000 <= {distance}
-               AND NOT n.`_id` IN {processed_ids}
-               RETURN n"""
-    #print(query)
-    result =  neo4j_connection.run_query(query)
-    neo4j_connection.close()
-    return result
-
-
-def proximity_score(userInfo, max_distance:int = 10000, increment_distance:int=50,  max_people:int = 4, max_score:int=25, coefficient_score:float=0.15  ):
     
-    ids = [userInfo['_id']]
-    distance = 0
-    people = 0
-    valutation = dict()
-    while people <= max_people and distance < max_distance  :   
-        
-        if people == max_people:
-            break
-        users = get_user_by_proximity(distance, userInfo['location'],ids)
+    query = f"""
+         MATCH (n:User)
+        WHERE point.distance(n.location, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
+        AND  n._id <> '{user_id}'
+        WITH n, point.distance(n.location, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as distance
+        RETURN n, distance
+        ORDER BY distance
+        {'LIMIT ' + str(limit) if limit is not None else ''}
+        """
+    result = connection.run_query(query)
+    connection.close()
+    data = [{ **item["n"], "distance": item["distance"] } for item in result]
+    df = pd.DataFrame(data)
+    return df
 
-        if len(users) > 0:
-            valutation["score_proximity"] =  max_score * (1 - coefficient_score) ** (distance/increment_distance)
-        else:
-            valutation["score_proximity"] = None
+def calculate_proximity_score(distance, max_score:int=25,coefficient_score:float=0.15,increment_distance:int=50 ):
+    return  max_score * (1 - coefficient_score) ** (distance / increment_distance)
 
-        data = [{**item['n'] , **valutation} for item in users]
-        
-        [ids.append(item['n']['_id']) for item in users if item['n']['_id'] not in ids]
+def calculate_bz_interest_score(user_bz_interests, table_bz_insterests, max_score:int=25):
+    bz_interest = set(table_bz_insterests) & set(user_bz_interests)
+    if len(bz_interest) > 1:
+        divisor = max_score * 0.25 # per dare piu  importanza a una singola combinazione
+        dividend = (1 + np.exp(-1 * (len(bz_interest) - 1)))
+        return max_score * 0.75 + (divisor / dividend)
+    else:
+        return max_score * 0.75 * len(bz_interest)
 
-        if ('df' not in locals() or df.empty):
-            df = pd.DataFrame(data)       
-        else:
-            newDf = pd.DataFrame(data)
-            df = pd.concat([df, newDf], ignore_index=True)
+def calculate_skills_score(user_skills, table_skills, max_score:int=25):
+    merged_skill = set(user_skills) & set(table_skills)
+    sum_skill = set(user_skills).union(table_skills)
+    return -(max_score / len(sum_skill)) * len(merged_skill) + max_score
 
-        distance = distance + increment_distance
-        people =  len(df)
+def calculate_hobbies_score(user_hobbies, table_hobbies, max_score:int=25):
+    merged_hobby = set(user_hobbies) & set(table_hobbies)
+    sum_hobbies = set(user_hobbies).union(table_hobbies)
+    return (max_score / len(sum_hobbies)) * len(merged_hobby)
+
+def calculate_total_score(df):
+    df['total_score'] = df['proximity_score']+df['bz_interests_score']+df['skills_score']+df['hobbies_score']
     return df
 
 
 
-def get_score(userInfo, threshold_score=70, max_score=25):
-    df = proximity_score(userInfo)
+def get_scores(connection, user_info, threshold_score=70):
+    try:
+        score_result = get_user_by_proximity(connection, user_info["_id"], user_info["location"])
+        score_result['proximity_score'] = score_result['distance'].apply(calculate_proximity_score)
+
+        # Utilizza una funzione lambda per passare due parametri
+        score_result['bz_interests_score'] = score_result.apply(
+            lambda row: calculate_bz_interest_score(row['Bz_interests'], user_info['Bz_interests']),
+            axis=1
+        )
+        score_result['skills_score'] = score_result.apply(
+            lambda row: calculate_skills_score(row['Skills'], user_info['Skills']),
+            axis=1
+        )
+        score_result['hobbies_score'] = score_result.apply(
+            lambda row: calculate_hobbies_score(row['Hobbies'], user_info['Hobbies']),
+            axis=1
+        )
+
+        final_data = calculate_total_score(score_result)
+        return final_data[final_data["total_score"] >= threshold_score].to_json(orient="records")
+    except Exception as e:
+        print(e)
+    finally:
+        connection.close()
+
+
+
+
+def get_matching(user_info):
+    dotenv.load_dotenv()
+    URI = os.getenv("NEO4J_URI")
+    AUTH = {"user": os.getenv("NEO4J_USERNAME"), "password": os.getenv("NEO4J_PASSWORD")}
+    connection = Neo4jConnection(URI, AUTH)
+    connection.connect()
+    data = get_scores(connection, user_info)
+    return data
+
+
+
+
+
+if __name__ == "__main__":
     
-    for x, y in df.iterrows():
-        bz_interest = set(userInfo['Bz_interests']) & set(y['Bz_interests'])
-        if len(bz_interest) > 1:
-            divisore = max_score * 0.25
-            dividendo = (1 + np.exp(-1 * (len(bz_interest) - 1)))
-            bz_interest_score = max_score * 0.75 + (divisore / dividendo)
-        else:
-            bz_interest_score = max_score * 0.75 * len(bz_interest)
-        
-        df.at[x, "bz_interest_score"] = bz_interest_score
-
-        mergedSkill = set(userInfo['Skills']) & set(y['Skills'])
-        sumSkil = set(userInfo['Skills']).union(y['Skills'])
-        skills_score = -(max_score / len(sumSkil)) * len(mergedSkill) + max_score
-        df.at[x, "skills_score"] = skills_score
-
-        mergedHobbie = set(userInfo['Hobbies']) & set(y['Hobbies'])
-        sumHobbies = set(userInfo['Hobbies']).union(y['Hobbies'])
-        hobbies_score = (max_score / len(sumHobbies)) * len(mergedHobbie)
-        df.at[x, "hobbies_score"] = hobbies_score
-
-        total_score =  y['score_proximity'] + bz_interest_score + skills_score + hobbies_score
-        df.at[x, "total_score"] =total_score
-
-    output = df[df["total_score"] >= threshold_score]
-    return output.to_json(orient="records")
-
-
-
-user = {
+    user_info =  {
           "Nome": "Marco"
         , "Cognome": "Verde"
         , "_id": "8pv9l632qt"
@@ -129,4 +126,5 @@ user = {
         , "Skills": ["Gestione progetti", "Social Media Marketing"]
         , "Hobbies": ["Escursionismo", "Musica"]      
     }
-
+    
+    print(get_matching(user_info))
