@@ -32,14 +32,14 @@ def get_user_by_proximity(connection, user_id:str, user_position:str, limit:int=
          MATCH (n:User)
         WHERE point.distance(n.location, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
         AND  n._id <> '{user_id}'
-        WITH n, point.distance(n.location, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as distance
-        RETURN n, distance
-        ORDER BY distance
+        WITH n, point.distance(n.location, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as straight_line_distance
+        RETURN n, straight_line_distance
+        ORDER BY straight_line_distance
         {'LIMIT ' + str(limit) if limit is not None else ''}
         """
     result = connection.run_query(query)
     connection.close()
-    data = [{ **item["n"], "distance": item["distance"] } for item in result]
+    data = [{ **item["n"], "straight_line_distance": item["straight_line_distance"] } for item in result]
     df = pd.DataFrame(data)
     return df
 
@@ -74,7 +74,7 @@ def calculate_total_score(df):
 def get_scores(connection, user_info, threshold_score=70):
     try:
         score_result = get_user_by_proximity(connection, user_info["_id"], user_info["location"])
-        score_result['proximity_score'] = score_result['distance'].apply(calculate_proximity_score)
+        score_result['proximity_score'] = score_result['straight_line_distance'].apply(calculate_proximity_score)
 
         # Utilizza una funzione lambda per passare due parametri
         score_result['bz_interests_score'] = score_result.apply(
