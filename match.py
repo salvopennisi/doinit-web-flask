@@ -41,11 +41,11 @@ def get_user_by_proximity(connection, user_id:str, user_position:str, limit:int=
         """
     
     result = connection.run_query(query)
-    print(result)
+    # print(result)
     connection.close()
     data = [{ **item["n"], "straight_line_distance": item["straight_line_distance"] } for item in result]
     df = pd.DataFrame(data)
-    print('get_user_prox')
+    # print('get_user_prox')
     return df
 
 def calculate_proximity_score(distance, max_score:int=25,coefficient_score:float=0.15,increment_distance:int=50 ):
@@ -77,7 +77,7 @@ def calculate_total_score(df):
 
 
 def get_scores(connection, user_info, threshold_score=70):
-    print('get_scores')
+    # print('get_scores')
     try:
         score_result = get_user_by_proximity(connection, user_info["id"], user_info["position"])
         score_result['proximity_score'] = score_result['straight_line_distance'].apply(calculate_proximity_score)
@@ -99,7 +99,7 @@ def get_scores(connection, user_info, threshold_score=70):
         final_data = calculate_total_score(score_result)
         return final_data[final_data["total_score"] >= threshold_score].to_json(orient="records")
     except Exception as e:
-        print(e)
+        # print(e)
     finally:
         connection.close()
 
@@ -110,8 +110,8 @@ def get_matching(user_info):
     
     URI = os.getenv("NEO4J_URI")
     AUTH = {"user": os.getenv("NEO4J_USERNAME"), "password": os.getenv("NEO4J_PASSWORD")}
-    print(URI)
-    print(AUTH)
+    # print(URI)
+    # print(AUTH)
     connection = Neo4jConnection(URI, AUTH)
     connection.connect()
     data = get_scores(connection, user_info)
@@ -156,4 +156,4 @@ if __name__ == "__main__":
 	"bio": "Gesu di Nazaret"
 }
     
-    print(get_matching(user_info))
+    # print(get_matching(user_info))
