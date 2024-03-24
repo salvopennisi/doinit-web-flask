@@ -4,13 +4,18 @@ from neo4j import GraphDatabase
 import pandas as pd 
 import numpy as np
 import json 
+import logging 
+
+# logging.basicConfig(level=logging.DEBUG) 
+
 
 load_dotenv(find_dotenv())
 class Neo4jConnection:
-    def __init__(self, uri, auth):
+    def __init__(self, uri, auth, database=None):
         self._uri = uri
         self._user = auth["user"]
         self._password = auth["password"]
+        self.database = database
         self._driver = None
 
     def close(self):
@@ -18,30 +23,30 @@ class Neo4jConnection:
             self._driver.close()
 
     def connect(self):
-        self._driver = GraphDatabase.driver(self._uri, auth=(self._user, self._password))
+        self._driver = GraphDatabase.driver(self._uri, auth=(self._user, self._password), database=self.database)
 
     def run_query(self, query, parameters=None):
         with self._driver.session() as session:
             result = session.run(query, parameters)
             return result.data()
 
-def get_user_by_proximity(connection, user_id:str, user_position:str, limit:int=100, max_distance:int=1000 ):
+def get_user_by_proximity(connection, user_id:str, user_position:dict, limit:int=100, max_distance:int=1000 ):
     
     latitude = user_position['y']
     longitude = user_position['x']
     
     query = f"""
          MATCH (n:User)
-        WHERE point.distance(n.position, point({{y: {latitude}, x: {longitude}}}))/1000 <= {max_distance}
+        WHERE point.distance(n.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
         AND  n.id <> '{user_id}'
-        WITH n, point.distance(n.position, point({{y: {latitude}, x: {longitude}}}))/1000 as straight_line_distance
+        WITH n, point.distance(n.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as straight_line_distance
         RETURN n, straight_line_distance
         ORDER BY straight_line_distance
         {'LIMIT ' + str(limit) if limit is not None else ''}
         """
-    
+    print(query)
     result = connection.run_query(query)
-    # print(result)
+    print(result)
     connection.close()
     data = [{ **item["n"], "straight_line_distance": item["straight_line_distance"] } for item in result]
     df = pd.DataFrame(data)
@@ -100,6 +105,7 @@ def get_scores(connection, user_info, threshold_score=70):
         return final_data[final_data["total_score"] >= threshold_score].to_json(orient="records")
     except Exception as e:
         print(e)
+        return []
     finally:
         connection.close()
 
@@ -110,8 +116,6 @@ def get_matching(user_info):
     
     URI = os.getenv("NEO4J_URI")
     AUTH = {"user": os.getenv("NEO4J_USERNAME"), "password": os.getenv("NEO4J_PASSWORD")}
-    # print(URI)
-    # print(AUTH)
     connection = Neo4jConnection(URI, AUTH)
     connection.connect()
     data = get_scores(connection, user_info)
@@ -123,6 +127,8 @@ def get_matching(user_info):
 
 if __name__ == "__main__":
     
+    os.environ['NEO4J_URI'] = "neo4j+ssc://4af74bb1.databases.neo4j.io"
+
     user_info =  {
 	"id": "xNgGxgvORo",
 	"firstName": "Salvatore",
@@ -155,5 +161,8 @@ if __name__ == "__main__":
 	"imgProfileLocation": "https://prflimgs.s3.eu-central-1.amazonaws.com/xNgGxgvORo/1665330192772.jpeg",
 	"bio": "Gesu di Nazaret"
 }
-    
-    # print(get_matching(user_info))
+
+env = "C:\\Users\\Salvatore Pennisi\\Desktop\\Git\\MVP Doinit\\doinit-web-flask\\.env"
+load_dotenv(find_dotenv(env))
+
+print(get_matching(user_info))
