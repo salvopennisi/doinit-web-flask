@@ -22,5 +22,5 @@ def index():
         return "An error occurred while processing the request", 500
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)  # Set the logging level to DEBUG
+ # Set the logging level to DEBUG
     app.run(debug=True, host='0.0.0.0', port=8080)
