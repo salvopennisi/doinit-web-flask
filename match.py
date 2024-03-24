@@ -125,44 +125,44 @@ def get_matching(user_info):
 
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     
-    os.environ['NEO4J_URI'] = "neo4j+ssc://4af74bb1.databases.neo4j.io"
+#     os.environ['NEO4J_URI'] = "neo4j+ssc://4af74bb1.databases.neo4j.io"
 
-    user_info =  {
-	"id": "xNgGxgvORo",
-	"firstName": "Salvatore",
-	"lastName": "Pennisi",
-	"city": "Roma",
-	"position": {
-		"srid": {
-			"low": 4326,
-			"high": 0
-		},
-		"x": 12.4829321,
-		"y": 41.8933203
-	},
-	"hobbies": [
-		"Cooking",
-		"Bodybuilding",
-		"Reading"
-	],
-	"skills": [
-		"Web Development",
-		"Software Engineering",
-		"Catering"
-	],
-	"businessInterests": [
-		"Social Media",
-		"Web Development",
-		"Software Development",
-		"Real Estate"
-	],
-	"imgProfileLocation": "https://prflimgs.s3.eu-central-1.amazonaws.com/xNgGxgvORo/1665330192772.jpeg",
-	"bio": "Gesu di Nazaret"
-}
+#     user_info =  {
+# 	"id": "xNgGxgvORo",
+# 	"firstName": "Salvatore",
+# 	"lastName": "Pennisi",
+# 	"city": "Roma",
+# 	"position": {
+# 		"srid": {
+# 			"low": 4326,
+# 			"high": 0
+# 		},
+# 		"x": 12.4829321,
+# 		"y": 41.8933203
+# 	},
+# 	"hobbies": [
+# 		"Cooking",
+# 		"Bodybuilding",
+# 		"Reading"
+# 	],
+# 	"skills": [
+# 		"Web Development",
+# 		"Software Engineering",
+# 		"Catering"
+# 	],
+# 	"businessInterests": [
+# 		"Social Media",
+# 		"Web Development",
+# 		"Software Development",
+# 		"Real Estate"
+# 	],
+# 	"imgProfileLocation": "https://prflimgs.s3.eu-central-1.amazonaws.com/xNgGxgvORo/1665330192772.jpeg",
+# 	"bio": "Gesu di Nazaret"
+# }
 
-env = "C:\\Users\\Salvatore Pennisi\\Desktop\\Git\\MVP Doinit\\doinit-web-flask\\.env"
-load_dotenv(find_dotenv(env))
+# env = "C:\\Users\\Salvatore Pennisi\\Desktop\\Git\\MVP Doinit\\doinit-web-flask\\.env"
+# load_dotenv(find_dotenv(env))
 
-print(get_matching(user_info))
+# print(get_matching(user_info))
