@@ -99,7 +99,7 @@ def get_scores(connection, user_info, threshold_score=70):
         final_data = calculate_total_score(score_result)
         return final_data[final_data["total_score"] >= threshold_score].to_json(orient="records")
     except Exception as e:
-        # print(e)
+        print(e)
     finally:
         connection.close()
 
