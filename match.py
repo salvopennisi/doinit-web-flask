@@ -1,4 +1,3 @@
-from dotenv import load_dotenv, find_dotenv
 import os
 from neo4j import GraphDatabase
 import pandas as pd 
@@ -6,10 +5,9 @@ import numpy as np
 import json 
 import logging 
 
-# logging.basicConfig(level=logging.DEBUG) 
+logging.basicConfig(level=logging.DEBUG) 
 
 
-load_dotenv(find_dotenv())
 class Neo4jConnection:
     def __init__(self, uri, auth, database=None):
         self._uri = uri
@@ -36,17 +34,27 @@ def get_user_by_proximity(connection, user_id:str, user_position:dict, limit:int
     longitude = user_position['x']
     
     query = f"""
-         MATCH (n:User)
-        WHERE point.distance(n.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
-        AND  n.id <> '{user_id}'
-        WITH n, point.distance(n.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as straight_line_distance
-        RETURN n, straight_line_distance
+         MATCH (u:User)
+        WHERE point.distance(u.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
+        AND  u.id <> '{user_id}'
+        WITH u, point.distance(u.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 as straight_line_distance
+        OPTIONAL MATCH (u)-[:HAS_SKILLS]->(s:Skills)
+        WITH u,straight_line_distance, COLLECT(DISTINCT s.name) AS skills
+        OPTIONAL MATCH (u)-[:HAS_BUSINESSINTERESTS]->(b:BusinessInterests)
+        WITH u,straight_line_distance, skills, COLLECT(DISTINCT b.name) AS businessInterests
+        OPTIONAL MATCH (u)-[:HAS_HOBBIES]->(b:Hobbies)
+        WITH u,straight_line_distance, skills, businessInterests, COLLECT(DISTINCT b.name) AS hobbies
+        WITH straight_line_distance,businessInterests, hobbies, apoc.map.setKey(properties(u), 'skills', skills) as withSkills
+        WITH straight_line_distance,withSkills,hobbies,businessInterests, apoc.map.setKey(withSkills, 'businessInterests', businessInterests) as withBizInterests
+        WITH straight_line_distance,withBizInterests, hobbies, apoc.map.setKey(withBizInterests, 'hobbies', hobbies) as withHobbies
+        RETURN withHobbies as n, straight_line_distance
+            
         ORDER BY straight_line_distance
         {'LIMIT ' + str(limit) if limit is not None else ''}
+
         """
     print(query)
     result = connection.run_query(query)
-    print(result)
     connection.close()
     data = [{ **item["n"], "straight_line_distance": item["straight_line_distance"] } for item in result]
     df = pd.DataFrame(data)
@@ -56,7 +64,7 @@ def get_user_by_proximity(connection, user_id:str, user_position:dict, limit:int
 def calculate_proximity_score(distance, max_score:int=25,coefficient_score:float=0.15,increment_distance:int=50 ):
     return  max_score * (1 - coefficient_score) ** (distance / increment_distance)
 
-def calculate_bz_interest_score(user_businessInterests, table_bz_insterests, max_score:int=25):
+def calculate_bz_interest_score(user_businessInterests, table_bz_insterests, max_score:int=35):
     bz_interest = set(table_bz_insterests) & set(user_businessInterests)
     if len(bz_interest) > 1:
         divisor = max_score * 0.25 # per dare piu  importanza a una singola combinazione
@@ -65,12 +73,12 @@ def calculate_bz_interest_score(user_businessInterests, table_bz_insterests, max
     else:
         return max_score * 0.75 * len(bz_interest)
 
-def calculate_skills_score(user_skills, table_skills, max_score:int=25):
+def calculate_skills_score(user_skills, table_skills, max_score:int=20):
     merged_skill = set(user_skills) & set(table_skills)
     sum_skill = set(user_skills).union(table_skills)
     return -(max_score / len(sum_skill)) * len(merged_skill) + max_score
 
-def calculate_hobbies_score(user_hobbies, table_hobbies, max_score:int=25):
+def calculate_hobbies_score(user_hobbies, table_hobbies, max_score:int=20):
     merged_hobby = set(user_hobbies) & set(table_hobbies)
     sum_hobbies = set(user_hobbies).union(table_hobbies)
     return (max_score / len(sum_hobbies)) * len(merged_hobby)
@@ -79,32 +87,51 @@ def calculate_total_score(df):
     df['total_score'] = df['proximity_score']+df['businessInterests_score']+df['skills_score']+df['hobbies_score']
     return df
 
+def get_compatible_features(userInfo, tableInfo, type='inner'):
+    compatible_feature = []
+    if type=='inner':
+        compatible_feature = set(userInfo) & set(tableInfo)   
+    elif type =='outer':
+        compatible_feature= set(userInfo) - set(tableInfo)  
+    return compatible_feature
 
-
-def get_scores(connection, user_info, threshold_score=70):
+def get_scores(connection, user_info, threshold_score=20):
     # print('get_scores')
     try:
-        score_result = get_user_by_proximity(connection, user_info["id"], user_info["position"])
-        score_result['proximity_score'] = score_result['straight_line_distance'].apply(calculate_proximity_score)
-
+        matchedUsers = get_user_by_proximity(connection, user_info["id"], user_info["position"])
+        matchedUsers['proximity_score'] = matchedUsers['straight_line_distance'].apply(calculate_proximity_score)
         # Utilizza una funzione lambda per passare due parametri
-        score_result['businessInterests_score'] = score_result.apply(
+        matchedUsers['businessInterests_score'] = matchedUsers.apply(
             lambda row: calculate_bz_interest_score(row['businessInterests'], user_info['businessInterests']),
             axis=1
         )
-        score_result['skills_score'] = score_result.apply(
+        matchedUsers['common_business_interests'] = matchedUsers.apply(
+           lambda row: get_compatible_features(row['businessInterests'], user_info['businessInterests']),
+            axis=1
+        )
+        matchedUsers['skills_score'] = matchedUsers.apply(
             lambda row: calculate_skills_score(row['skills'], user_info['skills']),
             axis=1
         )
-        score_result['hobbies_score'] = score_result.apply(
+        matchedUsers['different_skills'] = matchedUsers.apply(
+           lambda row: get_compatible_features(row['skills'], user_info['skills'],type='outer'),
+            axis=1
+        )
+        matchedUsers['hobbies_score'] = matchedUsers.apply(
             lambda row: calculate_hobbies_score(row['hobbies'], user_info['hobbies']),
             axis=1
         )
+        matchedUsers['common_hobbies'] = matchedUsers.apply(
+           lambda row: get_compatible_features(row['hobbies'], user_info['hobbies']),
+            axis=1
+        )
+        scoredMatchedUsers = calculate_total_score(matchedUsers)
+        jsonData = scoredMatchedUsers[scoredMatchedUsers["total_score"] >= threshold_score].to_json(orient="records")
+        print(jsonData)
 
-        final_data = calculate_total_score(score_result)
-        return final_data[final_data["total_score"] >= threshold_score].to_json(orient="records")
+        return jsonData
     except Exception as e:
-        print(e)
+        print(f'errore:\n{e}')
         return []
     finally:
         connection.close()
@@ -114,7 +141,8 @@ def get_scores(connection, user_info, threshold_score=70):
 
 def get_matching(user_info):
     
-    URI = os.getenv("NEO4J_URI")
+    URI = 'neo4j+ssc://4af74bb1.databases.neo4j.io/:7687' #os.getenv("NEO4J_URI")
+    print(URI)
     AUTH = {"user": os.getenv("NEO4J_USERNAME"), "password": os.getenv("NEO4J_PASSWORD")}
     connection = Neo4jConnection(URI, AUTH)
     connection.connect()

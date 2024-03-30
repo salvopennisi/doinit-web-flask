@@ -2,6 +2,10 @@ import logging
 from flask import Flask, request
 from flask_cors import CORS
 from match import get_matching
+from dotenv import load_dotenv, find_dotenv
+
+
+load_dotenv('./.env')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)  # Set the logging level to DEBUG
@@ -16,6 +20,7 @@ def index():
         logging.debug("Received request data: %s", res)
         
         group = get_matching(res)
+        print(group)
         return group
     except Exception as e:
         logging.exception("An error occurred while processing the request: %s", str(e))
