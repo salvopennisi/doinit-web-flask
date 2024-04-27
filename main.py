@@ -28,14 +28,7 @@ def mainPeople():
         # logging.exception("An error occurred while processing the request: %s", str(e))
         return "An error occurred while processing the request", 500
 
-<<<<<<< HEAD
-
 
 if __name__ == "__main__":
     # Set the logging level to DEBUG
     app.run(debug=False, host="0.0.0.0", port=8080)
-=======
-if __name__ == '__main__':
- # Set the logging level to DEBUG
-    app.run(debug=True, host='0.0.0.0')
->>>>>>> b6322f7c48fa8bb08bd695258df32d99dd67513a
