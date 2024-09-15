@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-import logging
+import json 
 from neo4j_manager import Neo4jManager
 from score_calculator import ScoreCalculator
 
@@ -48,7 +48,6 @@ def get_user_by_proximity(
         for item in result
     ]
     df = pd.DataFrame(data)
-    # print('get_user_prox')
     return df
 
 
@@ -129,7 +128,7 @@ def get_scores(connection, sc, user_info, threshold_score=50):
             scoredMatchedUsers["total_score"] >= threshold_score
         ].to_json(orient="records")
 
-        return jsonData
+        return  jsonData
     except Exception as e:
         print(f"errore:\n{e}")
         return []

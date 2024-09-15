@@ -9,7 +9,7 @@ import json
 load_dotenv("./.env")
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)  # Set the logging level to DEBUG
+# logging.basicConfig(level=logging.DEBUG)  # Set the logging level to DEBUG
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all endpoints
@@ -26,7 +26,7 @@ def mainPeople():
         return {"people": json.loads(people), "groups": json.loads(groups)}
     except Exception as e:
         # logging.exception("An error occurred while processing the request: %s", str(e))
-        return "An error occurred while processing the request", 500
+        return f"An error occurred while processing the request:\n{e}", 500
 
 
 if __name__ == "__main__":

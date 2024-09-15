@@ -16,36 +16,35 @@ def get_groups(connection, user_info: dict, max_distance: int = 1000):
     user_id = user_info["id"]
 
     query = f"""
-        MATCH (u:User)-[r]->(g:Group)
-        WHERE u.id <> '{user_id}'
-            AND g.businessSector IN {user_interests}
-            AND point.distance(g.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
-        MATCH (u)-[r1]->(s:Skill)
-        MATCH (u)-[r2]->(h:Hobbie)
-        OPTIONAL MATCH (u)-[r3:HAS_EXPERIENCE_IN]->(b:BusinessType)
-        WITH g,
-            point.distance(g.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance} as straightLineDistance,
-            count(DISTINCT u.id) as numberOfmembers,
-            collect(DISTINCT s.name) as skill,
-            collect(DISTINCT h.name) as hobbies,
-            collect(DISTINCT b.name) as experience
-        WITH g,
-            skill,
-            hobbies,
-            experience,
-            numberOfmembers,
-            straightLineDistance,
-            apoc.map.setPairs(g,[
-                            ['skills',skill]
-                            ,['hobbies',hobbies]
-                            ,['experience',experience]
-                            ,['numberOfmembers',toString(numberOfmembers)]
-                            ,['straightLineDistance',straightLineDistance]
-                            ]) as group
-        WHERE toInteger(group.numberOfmembers) <  toInteger(group.maxParticipants)
-        return group
-
-         """
+    MATCH (u:User)-[r]->(g:Group)
+    WHERE u.id <> '{user_id}'
+        AND g.businessSector IN {user_interests}
+        AND point.distance(g.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance}
+    MATCH (u)-[r1]->(s:Skill)
+    MATCH (u)-[r2]->(h:Hobbie)
+    OPTIONAL MATCH (u)-[r3:HAS_EXPERIENCE_IN]->(b:BusinessType)
+    WITH g,
+        point.distance(g.position, point({{latitude: {latitude}, longitude: {longitude}}}))/1000 <= {max_distance} as straightLineDistance,
+        collect(DISTINCT u.id) as memberIds,
+        collect(DISTINCT s.name) as skill,
+        collect(DISTINCT h.name) as hobbies,
+        collect(DISTINCT b.name) as experience
+    WITH g,
+        skill,
+        hobbies,
+        experience,
+        memberIds,
+        straightLineDistance,
+        apoc.map.setPairs(g, [
+            ['skills', skill],
+            ['hobbies', hobbies],
+            ['experience', experience],
+            ['memberIds', memberIds],
+            ['straightLineDistance', straightLineDistance]
+        ]) as group
+    WHERE size(group.memberIds) < toInteger(group.maxParticipants)
+    RETURN group
+    """
     result = connection.run_query(query)
     connection.close()
     data = [{**item["group"]} for item in result]
@@ -97,7 +96,7 @@ def calculate_scores(connection, sc, user_info):
         dfSorted = groupsWithTotalScore.sort_values(by="total_score", ascending=False)
         return dfSorted.to_json(orient="records")
     else:
-        return {}
+        return json.dumps({})
 
 
 def get_matching_groups(user_info):
