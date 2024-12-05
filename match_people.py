@@ -138,7 +138,7 @@ def get_scores(connection, sc, user_info, threshold_score=50):
 
 def get_matching_people(user_info):
 
-    URI = "neo4j+ssc://4af74bb1.databases.neo4j.io/:7687"  # os.getenv("NEO4J_URI")
+    URI = f"{os.getenv("NEO4J_URI")}/:7687" 
     AUTH = {
         "user": os.getenv("NEO4J_USERNAME"),
         "password": os.getenv("NEO4J_PASSWORD"),
