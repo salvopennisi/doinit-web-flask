@@ -4,9 +4,11 @@ import numpy as np
 import json 
 from neo4j_manager import Neo4jManager
 from score_calculator import ScoreCalculator
+from dotenv import load_dotenv, find_dotenv
 
 # logging.basicConfig(level=logging.DEBUG)
 
+load_dotenv(find_dotenv())
 
 def get_user_by_proximity(
     connection,
@@ -138,7 +140,7 @@ def get_scores(connection, sc, user_info, threshold_score=50):
 
 def get_matching_people(user_info):
 
-    URI = f"{os.getenv("NEO4J_URI")}/:7687" 
+    URI = os.getenv("NEO4J_URI") + "/:7687" 
     AUTH = {
         "user": os.getenv("NEO4J_USERNAME"),
         "password": os.getenv("NEO4J_PASSWORD"),
@@ -149,20 +151,3 @@ def get_matching_people(user_info):
     data = get_scores(connection, sc, user_info)
     return data
 
-
-# user_info = {
-#     "id": "xNgGxgvORo",
-#     "position": {"srid": {"low": 4326, "high": 0}, "x": 12.4829321, "y": 41.8933203},
-#     "businessInterests": [
-#         "Civil Engineering",
-#         "Healthcare",
-#         "Real Estate Trading",
-#         "R&D Partnerships",
-#     ],
-#     "skills": ["Farming", "Hydroponics"],
-#     'hobbies':  ['Photography', 'Cooking', 'Painting', 'Reading']
-# }
-
-# with open('matchPeople.json', 'w') as f:
-#     match = get_matching(user_info)
-#     f.write(match)
