@@ -9,7 +9,7 @@ import json
 load_dotenv("./.env")
 
 # Configure logging
-# logging.basicConfig(level=logging.DEBUG)  # Set the logging level to DEBUG
+#logging.basicConfig(level=logging.DEBUG)  # Set the logging level to DEBUG
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all endpoints
