@@ -133,7 +133,7 @@ def get_scores(connection, sc, user_info, threshold_score=50):
         return  jsonData
     except Exception as e:
         print(f"errore:\n{e}")
-        return json.dumps([{}])
+        return json.dumps([])
     finally:
         connection.close()
 
